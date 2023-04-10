@@ -17,4 +17,6 @@
 #include <memory.h>
 #include <tchar.h>
 #include <commdlg.h>
-//#include <gdiplus.h>
+#include <objidl.h>
+#include <gdiplus.h>
+

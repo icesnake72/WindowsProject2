@@ -4,6 +4,9 @@
 #include "framework.h"
 #include "WindowsProject2.h"
 
+using namespace Gdiplus;
+#pragma comment (lib,"Gdiplus.lib")
+
 #define WM_FILECOPY     WM_USER+100
 
 #define MAX_LOADSTRING  100
@@ -18,6 +21,8 @@ WCHAR szWindowClass[MAX_LOADSTRING];            // 기본 창 클래스 이름�
 //
 POINT pt;
 WCHAR wszCopyInfo[512] = { 0 };
+
+Image *pMyImage = NULL;
 
 
 // 이 코드 모듈에 포함된 함수의 선언을 전달합니다:
@@ -38,8 +43,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 {
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
+           
+    // Initialize GDI+.
+    GdiplusStartupInput gdiplusStartupInput;
+    ULONG_PTR           gdiplusToken;
 
-    // TODO: 여기에 코드를 입력합니다.
+    GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
 
     // 전역 문자열을 초기화합니다.
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
@@ -65,6 +74,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             DispatchMessage(&msg);
         }
     }
+
+    GdiplusShutdown(gdiplusToken);
 
     return (int) msg.wParam;
 }
@@ -154,6 +165,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 break;
 
             case IDM_OPEN_IMAGE:
+                OpenImageFile(hWnd);
                 break;
 
             case IDM_ABOUT:
@@ -195,11 +207,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             //::TextOutW(hdc, 0, 0,  L"Windows Programming", lstrlenW(L"Windows Programming"));
             // wsprintfW(wszCopyInfo, L"x: %d, y: %d", pt.x, pt.y);
             ::TextOutW(hdc, 0, 0, wszCopyInfo, lstrlenW(wszCopyInfo));
+
+            Graphics graphics(hdc);
+
+            if ( pMyImage )
+                graphics.DrawImage(pMyImage, 40, 40);
             
             EndPaint(hWnd, &ps);
         }
         break;
     case WM_DESTROY:
+        if (pMyImage)
+        {
+            delete[] pMyImage;
+            pMyImage = NULL;
+        }
+
         PostQuitMessage(0);
         break;
 
@@ -244,7 +267,7 @@ BOOL OpenAndCopyFile(HWND hWnd)
     ofn.hwndOwner = hWnd;
     ofn.lpstrFile = szSrcFile;
     ofn.nMaxFile = sizeof(szSrcFile);
-    ofn.lpstrFilter = _T("All\0*.*\0");
+    ofn.lpstrFilter = L"All\0*.*\0";
     ofn.nFilterIndex = 1;
     ofn.lpstrFileTitle = NULL;
     ofn.nMaxFileTitle = 0;
@@ -261,7 +284,7 @@ BOOL OpenAndCopyFile(HWND hWnd)
 
         sfn.lStructSize = sizeof(OPENFILENAME);
         sfn.hwndOwner = hWnd;
-        sfn.lpstrFilter = _T("All\0*.*\0");
+        sfn.lpstrFilter = L"All\0*.*\0";
         sfn.lpstrFile = szDestFile;
         sfn.nMaxFile = sizeof(szDestFile);
         sfn.lpstrFileTitle = NULL;
@@ -301,14 +324,14 @@ void copyFile(HWND hWnd, LPCWSTR srcFileName, LPCWSTR destFileName)
     }
 
     error = _wfopen_s(&srcFile, srcFileName, L"r+b");
-    if (error)
+    if (error || srcFile==NULL)
     {
         // printf("원본파일을 찾을수 없습니다.\n");
         goto Release_Area;
     }
 
     error = _wfopen_s(&destFile, destFileName, L"w+b");	// destination file을 append모드로 열었을때는 파일이 있는지 체크를 해야함
-    if (error)
+    if (error || destFile==NULL)
     {
         // printf("대상 파일을 열 수 없습니다.\n");
         goto Release_Area;
@@ -357,7 +380,38 @@ Release_Area:
 
 BOOL OpenImageFile(HWND hWnd)
 {
-    // Image* pImage = NULL;
+    if (pMyImage)
+    {
+        delete[] pMyImage;
+        pMyImage = NULL;
+    }
 
-    return TRUE;
+    OPENFILENAME ofn;       // common dialog box structure
+    TCHAR szSrcFile[512] = { 0 };
+
+    // Initialize OPENFILENAME
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hWnd;
+    ofn.lpstrFile = szSrcFile;
+    ofn.nMaxFile = sizeof(szSrcFile);
+    ofn.lpstrFilter = L"JPEG ImAGE\0*.jpg\0All\0*.*\0";
+    ofn.nFilterIndex = 1;
+    ofn.lpstrFileTitle = NULL;
+    ofn.nMaxFileTitle = 0;
+    ofn.lpstrInitialDir = NULL;
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+    if (GetOpenFileName(&ofn) == TRUE)
+    {
+        pMyImage = new Image(ofn.lpstrFile);
+        if (pMyImage)
+        {
+            return TRUE;
+            ::InvalidateRect(hWnd, NULL, TRUE);
+        }
+            
+    }
+    
+    return FALSE;
 }
